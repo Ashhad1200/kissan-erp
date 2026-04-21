@@ -1,0 +1,308 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(STAFF)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Products & Inventory ─────────────────────────────────────────────────────
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  products  Product[]
+}
+
+model Product {
+  id              String           @id @default(cuid())
+  name            String
+  sku             String           @unique
+  description     String?
+  unit            String           @default("pcs")
+  costPrice       Decimal          @default(0) @db.Decimal(12, 2)
+  salePrice       Decimal          @default(0) @db.Decimal(12, 2)
+  reorderLevel    Int              @default(10)
+  reorderQty      Int              @default(50)
+  shopifyId       String?          @unique
+  shopifyVariantId String?         @unique
+  active          Boolean          @default(true)
+  categoryId      String?
+  category        Category?        @relation(fields: [categoryId], references: [id])
+  stockMovements  StockMovement[]
+  poItems         POItem[]
+  saleItems       SaleItem[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+enum MovementType {
+  PURCHASE       // stock in from purchase
+  SALE           // stock out from sale
+  ADJUSTMENT     // manual correction
+  RETURN_IN      // customer return
+  RETURN_OUT     // return to supplier
+  OPENING        // opening stock
+}
+
+model StockMovement {
+  id          String       @id @default(cuid())
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id])
+  type        MovementType
+  qty         Decimal      @db.Decimal(12, 3) // positive = in, negative = out
+  balanceQty  Decimal      @db.Decimal(12, 3)
+  unitCost    Decimal      @default(0) @db.Decimal(12, 2)
+  reference   String?      // PO number, sale order number, etc.
+  notes       String?
+  createdAt   DateTime     @default(now())
+  createdBy   String?
+}
+
+// ─── Suppliers ────────────────────────────────────────────────────────────────
+
+model Supplier {
+  id             String          @id @default(cuid())
+  name           String
+  contactPerson  String?
+  phone          String?
+  email          String?
+  address        String?
+  city           String?
+  paymentTerms   String?         @default("Cash")
+  balance        Decimal         @default(0) @db.Decimal(12, 2) // AP balance
+  active         Boolean         @default(true)
+  purchaseOrders PurchaseOrder[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model PurchaseOrder {
+  id          String      @id @default(cuid())
+  poNumber    String      @unique
+  supplierId  String
+  supplier    Supplier    @relation(fields: [supplierId], references: [id])
+  status      POStatus    @default(DRAFT)
+  orderDate   DateTime    @default(now())
+  expectedDate DateTime?
+  notes       String?
+  subTotal    Decimal     @default(0) @db.Decimal(12, 2)
+  discount    Decimal     @default(0) @db.Decimal(12, 2)
+  total       Decimal     @default(0) @db.Decimal(12, 2)
+  paidAmount  Decimal     @default(0) @db.Decimal(12, 2)
+  items       POItem[]
+  payments    Payment[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+enum POStatus {
+  DRAFT
+  ORDERED
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+model POItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  qty             Decimal       @db.Decimal(12, 3)
+  receivedQty     Decimal       @default(0) @db.Decimal(12, 3)
+  unitCost        Decimal       @db.Decimal(12, 2)
+  total           Decimal       @db.Decimal(12, 2)
+}
+
+// ─── Customers ────────────────────────────────────────────────────────────────
+
+model Customer {
+  id         String      @id @default(cuid())
+  name       String
+  phone      String?
+  email      String?
+  address    String?
+  city       String?
+  balance    Decimal     @default(0) @db.Decimal(12, 2) // AR balance
+  shopifyId  String?     @unique
+  active     Boolean     @default(true)
+  orders     SaleOrder[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+// ─── Sales ────────────────────────────────────────────────────────────────────
+
+enum SaleChannel {
+  PHYSICAL
+  SHOPIFY
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  SHOPIFY
+  CREDIT
+}
+
+model SaleOrder {
+  id            String        @id @default(cuid())
+  orderNumber   String        @unique
+  channel       SaleChannel   @default(PHYSICAL)
+  shopifyOrderId String?      @unique
+  customerId    String?
+  customer      Customer?     @relation(fields: [customerId], references: [id])
+  status        OrderStatus   @default(PENDING)
+  orderDate     DateTime      @default(now())
+  notes         String?
+  subTotal      Decimal       @default(0) @db.Decimal(12, 2)
+  discount      Decimal       @default(0) @db.Decimal(12, 2)
+  total         Decimal       @default(0) @db.Decimal(12, 2)
+  paidAmount    Decimal       @default(0) @db.Decimal(12, 2)
+  items         SaleItem[]
+  payments      Payment[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model SaleItem {
+  id          String    @id @default(cuid())
+  saleOrderId String
+  saleOrder   SaleOrder @relation(fields: [saleOrderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  qty         Decimal   @db.Decimal(12, 3)
+  unitPrice   Decimal   @db.Decimal(12, 2)
+  unitCost    Decimal   @default(0) @db.Decimal(12, 2)
+  discount    Decimal   @default(0) @db.Decimal(12, 2)
+  total       Decimal   @db.Decimal(12, 2)
+}
+
+// ─── Payments ─────────────────────────────────────────────────────────────────
+
+enum PaymentType {
+  SALE_RECEIPT
+  PURCHASE_PAYMENT
+  EXPENSE
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  type            PaymentType
+  method          PaymentMethod
+  amount          Decimal       @db.Decimal(12, 2)
+  reference       String?
+  notes           String?
+  saleOrderId     String?
+  saleOrder       SaleOrder?    @relation(fields: [saleOrderId], references: [id])
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  createdAt       DateTime      @default(now())
+  createdBy       String?
+}
+
+// ─── Accounting ───────────────────────────────────────────────────────────────
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+model Account {
+  id           String        @id @default(cuid())
+  code         String        @unique
+  name         String
+  type         AccountType
+  parentId     String?
+  parent       Account?      @relation("AccountTree", fields: [parentId], references: [id])
+  children     Account[]     @relation("AccountTree")
+  balance      Decimal       @default(0) @db.Decimal(14, 2)
+  active       Boolean       @default(true)
+  debitLines   JournalLine[] @relation("DebitAccount")
+  creditLines  JournalLine[] @relation("CreditAccount")
+  createdAt    DateTime      @default(now())
+}
+
+model JournalEntry {
+  id          String        @id @default(cuid())
+  reference   String?
+  description String
+  entryDate   DateTime      @default(now())
+  lines       JournalLine[]
+  createdAt   DateTime      @default(now())
+  createdBy   String?
+}
+
+model JournalLine {
+  id             String       @id @default(cuid())
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  debitAccountId  String?
+  debitAccount    Account?    @relation("DebitAccount", fields: [debitAccountId], references: [id])
+  creditAccountId String?
+  creditAccount   Account?    @relation("CreditAccount", fields: [creditAccountId], references: [id])
+  amount         Decimal      @db.Decimal(14, 2)
+  description    String?
+}
+
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+
+model Expense {
+  id          String   @id @default(cuid())
+  description String
+  category    String
+  amount      Decimal  @db.Decimal(12, 2)
+  paidVia     String   @default("Cash")
+  expenseDate DateTime @default(now())
+  notes       String?
+  createdAt   DateTime @default(now())
+  createdBy   String?
+}
+
+// ─── Shopify Sync Log ─────────────────────────────────────────────────────────
+
+model ShopifySyncLog {
+  id        String   @id @default(cuid())
+  event     String
+  shopifyId String?
+  status    String   // success | error
+  payload   Json?
+  error     String?
+  createdAt DateTime @default(now())
+}
+
