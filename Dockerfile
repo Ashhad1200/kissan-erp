@@ -44,6 +44,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static     ./.next/static
 
 # Copy Prisma schema + migrations
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 # Copy full node_modules so Prisma CLI (v7) has all its transitive deps
 # (e.g. @prisma/config requires 'effect', which is not in the standalone bundle)
