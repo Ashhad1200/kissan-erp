@@ -43,9 +43,12 @@ COPY --from=builder /app/public           ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static     ./.next/static
 
-# Copy Prisma schema + migrations
+# Copy Prisma schema + migrations + seed
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+# seed.ts uses @/ path alias → needs tsconfig + src/
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+COPY --from=builder /app/src ./src
 
 # Copy full node_modules so Prisma CLI (v7) has all its transitive deps
 # (e.g. @prisma/config requires 'effect', which is not in the standalone bundle)
