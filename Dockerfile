@@ -1,5 +1,5 @@
 # ─── Stage 1: Install dependencies ───────────────────────────────────────────
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
@@ -8,7 +8,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
 # ─── Stage 2: Build the application ──────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
@@ -22,10 +22,11 @@ RUN npx prisma generate
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-RUN npm run build
+# Increase heap size to prevent OOM during Next.js build
+RUN NODE_OPTIONS="--max-old-space-size=2048" npm run build
 
 # ─── Stage 3: Production runner ───────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
