@@ -42,9 +42,11 @@ COPY --from=builder /app/public           ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static     ./.next/static
 
-# Copy Prisma files needed at runtime (migrations + schema + config)
-COPY --from=builder /app/prisma          ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+# Copy Prisma schema + migrations (needed for migrate deploy)
+COPY --from=builder /app/prisma ./prisma
+
+# Copy Prisma runtime packages into the standalone node_modules
+# (standalone embeds its own node_modules; Prisma must be placed there too)
 COPY --from=builder /app/node_modules/.prisma        ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma        ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma         ./node_modules/prisma
